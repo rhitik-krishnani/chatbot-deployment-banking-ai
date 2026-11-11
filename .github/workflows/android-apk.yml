@@ -51,7 +51,14 @@ jobs:
 
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          set -o pipefail
+          if ! ./gradlew assembleDebug --no-daemon 2>&1 | tee gradle.log; then
+            # Show the Gradle error on the run summary page so it is easy to find
+            msg=$( (grep -A25 "What went wrong" gradle.log || tail -40 gradle.log) | head -40 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=Gradle build failed::${msg}"
+            exit 1
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
