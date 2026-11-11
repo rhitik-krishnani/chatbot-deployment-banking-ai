@@ -1,0 +1,63 @@
+name: Build Android APK
+
+# Builds an installable debug APK in the cloud. No Android Studio needed.
+# Run it from the GitHub "Actions" tab (Run workflow), or it runs on every push to main.
+#
+# One-time setup: Settings > Secrets and variables > Actions > Variables > New variable
+#   Name: API_BASE_URL   Value: https://your-deployed-backend   (no trailing slash)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run tests
+        run: npm test
+
+      - name: Check backend address
+        run: |
+          if [ -z "$API_BASE_URL" ]; then
+            echo "::warning::API_BASE_URL is not set. The APK will build, but AI features will show 'not available in this build'."
+          fi
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+
+      - name: Build web app
+        run: npm run build:web
+        env:
+          VITE_API_BASE_URL: ${{ vars.API_BASE_URL }}
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: indian-money-code-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
